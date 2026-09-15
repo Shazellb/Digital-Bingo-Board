@@ -59,10 +59,11 @@ const CSV_HEADERS = [
 ];
 
 function csvEscape(value: string): string {
-  if (/[",\n]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`;
+  const safeValue = /^[\t\r\n ]*[=+\-@]/.test(value) ? `'${value}` : value;
+  if (/[",\r\n]/.test(safeValue)) {
+    return `"${safeValue.replace(/"/g, '""')}"`;
   }
-  return value;
+  return safeValue;
 }
 
 export function toCsv(entries: HistoryEntry[]): string {

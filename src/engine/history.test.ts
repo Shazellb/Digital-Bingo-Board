@@ -100,4 +100,21 @@ describe('history persistence', () => {
     expect(lines[1]).toContain('"Tonight, Hall A"');
     expect(lines[1]).toContain('great game');
   });
+
+  it.each(['=1+1', '+1+1', '-2+3', '@SUM(A1)', '  =1+1'])('neutralizes formula-like CSV fields: %s', (note) => {
+    addHistoryEntry(
+      { sessionId: 's1', sessionLabel: 'Tonight', patternId: 'x', patternName: 'X', winningBall: 7, ballsCalledCount: 9, timestamp: 0, note },
+      storage
+    );
+    const dataRow = toCsv(loadHistory(storage)).split('\n')[1];
+    expect(dataRow).toContain(`'${note}`);
+  });
+
+  it('quotes fields containing carriage returns', () => {
+    addHistoryEntry(
+      { sessionId: 's1', sessionLabel: 'Tonight', patternId: 'x', patternName: 'X', winningBall: 7, ballsCalledCount: 9, timestamp: 0, note: 'line one\rline two' },
+      storage
+    );
+    expect(toCsv(loadHistory(storage))).toContain('"line one\rline two"');
+  });
 });

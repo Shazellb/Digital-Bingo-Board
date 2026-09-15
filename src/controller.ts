@@ -90,27 +90,28 @@ function stopAuto(paused: boolean): void {
   render();
 }
 
-function performDraw(): void {
-  if (state.gameStatus === 'won') return;
+function performDraw(): boolean {
+  if (state.gameStatus === 'won') return false;
   const pattern = activePattern();
   const allowedColumns = state.smartDrawEnabled ? patternColumns(pattern) : undefined;
   const n = drawNext(state.drawEngine, { allowedColumns });
   if (n === null) {
     stopAuto(false);
     alert(state.smartDrawEnabled ? 'No uncalled balls remain in this pattern’s columns.' : 'All 75 balls have been called.');
-    return;
+    return false;
   }
   state.gameStatus = 'playing';
   if (state.settings.drawSoundEnabled) playDrawSound();
   if (state.settings.voiceEnabled && (state.settings.audioTarget === 'controller' || state.settings.audioTarget === 'both')) speakCall(n);
   persistAndSync();
   render();
+  return true;
 }
 
 function startAuto(): void {
   if (autoTimer !== null || state.gameStatus === 'won') return;
   autoPaused = false;
-  performDraw();
+  if (!performDraw()) return;
   autoTimer = window.setInterval(performDraw, state.settings.intervalMs);
   sendSync();
   render();
@@ -241,8 +242,8 @@ function saveCustomPattern(): void {
     alert('Give the custom pattern a name.');
     return;
   }
-  if (!editorCells.some(Boolean)) {
-    alert('Select at least one cell.');
+  if (!editorCells.some((selected, index) => selected && index !== FREE_INDEX)) {
+    alert('Select at least one non-FREE cell.');
     return;
   }
   if (editorPatternId) {

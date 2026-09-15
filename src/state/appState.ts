@@ -70,21 +70,107 @@ export function saveAppState(state: AppState, storage: Storage = localStorage): 
   storage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function normalizeSettings(value: unknown, fallback: Settings): Settings {
+  if (!isRecord(value)) return { ...fallback };
+  const intervals = [1000, 2000, 3000, 5000, 10000];
+  const audioTargets: AudioTarget[] = ['display', 'controller', 'both'];
+  return {
+    intervalMs: typeof value.intervalMs === 'number' && intervals.includes(value.intervalMs) ? value.intervalMs : fallback.intervalMs,
+    voiceEnabled: typeof value.voiceEnabled === 'boolean' ? value.voiceEnabled : fallback.voiceEnabled,
+    drawSoundEnabled: typeof value.drawSoundEnabled === 'boolean' ? value.drawSoundEnabled : fallback.drawSoundEnabled,
+    audioTarget: typeof value.audioTarget === 'string' && audioTargets.includes(value.audioTarget as AudioTarget) ? value.audioTarget as AudioTarget : fallback.audioTarget,
+    venueName: typeof value.venueName === 'string' ? value.venueName : fallback.venueName,
+  };
+}
+
+function normalizeSession(value: unknown, fallback: SessionState): SessionState {
+  if (!isRecord(value)
+    || typeof value.id !== 'string'
+    || typeof value.label !== 'string'
+    || typeof value.startedAt !== 'number'
+    || !Array.isArray(value.wonPatternIds)
+    || !value.wonPatternIds.every((id) => typeof id === 'string')) return fallback;
+  return {
+    id: value.id,
+    label: value.label,
+    startedAt: value.startedAt,
+    wonPatternIds: [...new Set(value.wonPatternIds)],
+  };
+}
+
+function isBallList(value: unknown): value is number[] {
+  return Array.isArray(value) && value.every((ball) => Number.isInteger(ball) && ball >= 1 && ball <= 75);
+}
+
+function normalizeDrawEngine(value: unknown, fallback: DrawEngineState): DrawEngineState {
+  if (!isRecord(value) || !isBallList(value.called) || !isBallList(value.remaining)) return fallback;
+  const combined = [...value.called, ...value.remaining];
+  if (combined.length !== 75 || new Set(combined).size !== 75) return fallback;
+  return { called: [...value.called], remaining: [...value.remaining] };
+}
+
+function isCustomPattern(value: unknown): value is Pattern {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.name === 'string'
+    && value.builtIn === false
+    && Array.isArray(value.cells)
+    && value.cells.length === 25
+    && value.cells.every((cell) => typeof cell === 'boolean')
+    && value.cells.some((selected, index) => selected && index !== 12);
+}
+
+function normalizeWinner(value: unknown): WinnerRecord | null {
+  if (!isRecord(value)
+    || typeof value.patternId !== 'string'
+    || typeof value.patternName !== 'string'
+    || !Number.isInteger(value.winningBall)
+    || (value.winningBall as number) < 1
+    || (value.winningBall as number) > 75
+    || !Number.isInteger(value.ballsCalledCount)
+    || (value.ballsCalledCount as number) < 1
+    || (value.ballsCalledCount as number) > 75
+    || typeof value.timestamp !== 'number'
+    || !Number.isFinite(value.timestamp)
+    || (value.note !== undefined && typeof value.note !== 'string')
+    || (value.overridden !== undefined && typeof value.overridden !== 'boolean')) return null;
+  return {
+    patternId: value.patternId,
+    patternName: value.patternName,
+    winningBall: value.winningBall as number,
+    ballsCalledCount: value.ballsCalledCount as number,
+    timestamp: value.timestamp,
+    note: value.note as string | undefined,
+    overridden: value.overridden as boolean | undefined,
+  };
+}
+
 export function loadAppState(storage: Storage = localStorage): AppState {
   const raw = storage.getItem(STORAGE_KEY);
   if (!raw) return createDefaultAppState();
   try {
-    const parsed = JSON.parse(raw) as Partial<AppState>;
+    const parsed: unknown = JSON.parse(raw);
     const fallback = createDefaultAppState();
+    if (!isRecord(parsed)) return fallback;
+    const customPatterns = Array.isArray(parsed.customPatterns) ? parsed.customPatterns.filter(isCustomPattern).map((pattern) => ({ ...pattern, cells: [...pattern.cells] })) : [];
+    const validPatternIds = new Set([...BUILT_IN_PATTERNS, ...customPatterns].map((pattern) => pattern.id));
+    const drawEngine = normalizeDrawEngine(parsed.drawEngine, fallback.drawEngine);
+    const winner = normalizeWinner(parsed.winner);
+    let gameStatus: GameStatus = ['idle', 'playing', 'won'].includes(String(parsed.gameStatus)) ? parsed.gameStatus as GameStatus : fallback.gameStatus;
+    if (gameStatus === 'won' && !winner) gameStatus = drawEngine.called.length > 0 ? 'playing' : 'idle';
     return {
-      settings: { ...fallback.settings, ...parsed.settings },
-      session: parsed.session ?? fallback.session,
-      drawEngine: parsed.drawEngine ?? fallback.drawEngine,
-      activePatternId: parsed.activePatternId ?? fallback.activePatternId,
-      customPatterns: parsed.customPatterns ?? fallback.customPatterns,
-      smartDrawEnabled: parsed.smartDrawEnabled ?? fallback.smartDrawEnabled,
-      gameStatus: parsed.gameStatus ?? fallback.gameStatus,
-      winner: parsed.winner ?? fallback.winner,
+      settings: normalizeSettings(parsed.settings, fallback.settings),
+      session: normalizeSession(parsed.session, fallback.session),
+      drawEngine,
+      activePatternId: typeof parsed.activePatternId === 'string' && validPatternIds.has(parsed.activePatternId) ? parsed.activePatternId : fallback.activePatternId,
+      customPatterns,
+      smartDrawEnabled: typeof parsed.smartDrawEnabled === 'boolean' ? parsed.smartDrawEnabled : fallback.smartDrawEnabled,
+      gameStatus,
+      winner,
     };
   } catch {
     return createDefaultAppState();

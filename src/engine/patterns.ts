@@ -166,6 +166,9 @@ export function markedGridFromCalled(calledNumbers: Set<number>, cardNumbers: (n
 
 let customIdCounter = 0;
 export function createCustomPattern(name: string, cells: boolean[]): Pattern {
+  if (!cells.some((selected, index) => selected && index !== FREE_INDEX)) {
+    throw new Error('A custom pattern must require at least one non-FREE cell.');
+  }
   customIdCounter += 1;
   return {
     id: `custom-${Date.now()}-${customIdCounter}`,

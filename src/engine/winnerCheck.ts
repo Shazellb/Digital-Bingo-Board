@@ -29,6 +29,7 @@ export function checkCardEntry(
   calledNumbers: Set<number>
 ): CardEntryResult {
   const errors: string[] = [];
+  const enteredNumbers = new Set<number>();
 
   for (let i = 0; i < pattern.cells.length; i++) {
     if (!pattern.cells[i] || i === FREE_INDEX) continue;
@@ -37,9 +38,13 @@ export function checkCardEntry(
       errors.push(`Cell ${i} is required by the pattern but has no number entered.`);
       continue;
     }
+    if (enteredNumbers.has(n)) {
+      errors.push(`${n} is entered more than once.`);
+    }
+    enteredNumbers.add(n);
     const expectedColumn = gridColumnOf(i);
     const [lo, hi] = COLUMN_RANGES[expectedColumn];
-    if (n < lo || n > hi || columnOf(n) !== expectedColumn) {
+    if (!Number.isInteger(n) || n < lo || n > hi || columnOf(n) !== expectedColumn) {
       errors.push(`${n} is not a valid ${expectedColumn} number (expected ${lo}-${hi}).`);
     }
   }

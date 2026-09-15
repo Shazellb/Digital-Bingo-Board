@@ -71,6 +71,29 @@ describe('checkCardEntry', () => {
     expect(result.valid).toBe(false);
   });
 
+  it('rejects duplicate numbers in required cells', () => {
+    const corners = findPattern('four-corners');
+    const card = new Array<number | null>(25).fill(null);
+    card[0] = 3;
+    card[20] = 3;
+    card[4] = 65;
+    card[24] = 65;
+    const result = checkCardEntry(corners, card, new Set([3, 65]));
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((error) => error.includes('more than once'))).toBe(true);
+  });
+
+  it.each([3.5, Number.NaN])('rejects non-integer card number %s without throwing', (invalidNumber) => {
+    const corners = findPattern('four-corners');
+    const card = new Array<number | null>(25).fill(null);
+    card[0] = invalidNumber;
+    card[4] = 65;
+    card[20] = 10;
+    card[24] = 70;
+    expect(() => checkCardEntry(corners, card, new Set([invalidNumber, 65, 10, 70]))).not.toThrow();
+    expect(checkCardEntry(corners, card, new Set([invalidNumber, 65, 10, 70])).valid).toBe(false);
+  });
+
   it('treats the free centre as satisfied without an entry', () => {
     const plus = findPattern('plus');
     const card = new Array(25).fill(null);

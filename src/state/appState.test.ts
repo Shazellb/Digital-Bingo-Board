@@ -48,4 +48,33 @@ describe('app state persistence', () => {
     expect(loaded.gameStatus).toBe('idle');
     expect(loaded.drawEngine.called).toEqual([]);
   });
+
+  it('recovers safely from malformed nested state', () => {
+    storage.setItem('bingo:appstate', JSON.stringify({
+      settings: { intervalMs: 'fast', voiceEnabled: 'yes' },
+      session: {},
+      drawEngine: {},
+      customPatterns: [{ id: 'bad', cells: [] }],
+      activePatternId: 'missing',
+      gameStatus: 'won',
+      winner: {},
+    }));
+    const loaded = loadAppState(storage);
+    expect(loaded.settings.intervalMs).toBe(5000);
+    expect(loaded.settings.voiceEnabled).toBe(true);
+    expect(loaded.session.wonPatternIds).toEqual([]);
+    expect(loaded.drawEngine.called).toEqual([]);
+    expect(loaded.drawEngine.remaining).toHaveLength(75);
+    expect(loaded.customPatterns).toEqual([]);
+    expect(loaded.gameStatus).toBe('idle');
+  });
+
+  it('rejects a persisted draw pool with duplicate or missing balls', () => {
+    const state = createDefaultAppState();
+    state.drawEngine = { called: [1, 1], remaining: [2, 3] };
+    saveAppState(state, storage);
+    const loaded = loadAppState(storage);
+    expect(loaded.drawEngine.called).toEqual([]);
+    expect(loaded.drawEngine.remaining).toHaveLength(75);
+  });
 });

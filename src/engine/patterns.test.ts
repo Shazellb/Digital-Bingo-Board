@@ -109,4 +109,10 @@ describe('createCustomPattern', () => {
     expect(p1.id).not.toBe(p2.id);
     expect(p1.name).toBe('My Pattern');
   });
+
+  it('rejects a pattern whose only selected cell is FREE', () => {
+    const cells = new Array<boolean>(25).fill(false);
+    cells[FREE_INDEX] = true;
+    expect(() => createCustomPattern('Free only', cells)).toThrow(/non-FREE/);
+  });
 });

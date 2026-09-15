@@ -1,6 +1,6 @@
 import Peer, { DataConnection } from 'peerjs';
 import { roomCodeToPeerId } from '../engine/roomCode';
-import { PeerMessage } from './protocol';
+import { isPeerMessage, PeerMessage } from './protocol';
 
 export type HostStatus = 'starting' | 'waiting' | 'connected' | 'error';
 
@@ -35,17 +35,22 @@ export function createPeerHost(roomCode: string): PeerHost {
   });
 
   peer.on('connection', (conn) => {
-    activeConn = conn;
     conn.on('open', () => {
+      const previousConn = activeConn;
+      activeConn = conn;
+      previousConn?.close();
       setStatus('connected');
       conn.send({ type: 'hello' } satisfies PeerMessage);
     });
     conn.on('data', (data) => {
-      messageListeners.forEach((cb) => cb(data as PeerMessage));
+      if (activeConn !== conn || !isPeerMessage(data)) return;
+      messageListeners.forEach((cb) => cb(data));
     });
     conn.on('close', () => {
-      if (activeConn === conn) activeConn = null;
-      setStatus('waiting');
+      if (activeConn === conn) {
+        activeConn = null;
+        setStatus('waiting');
+      }
     });
     conn.on('error', (err) => {
       console.error('[bingo] peer host connection error', err);

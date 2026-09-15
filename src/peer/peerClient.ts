@@ -1,6 +1,6 @@
 import Peer, { DataConnection } from 'peerjs';
 import { roomCodeToPeerId } from '../engine/roomCode';
-import { PeerMessage } from './protocol';
+import { isPeerMessage, PeerMessage } from './protocol';
 
 export type ClientStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -44,7 +44,9 @@ export function createPeerClient(roomCode: string): PeerClient {
     const c = peer.connect(targetId, { reliable: true });
     conn = c;
     c.on('open', () => setStatus('connected'));
-    c.on('data', (data) => messageListeners.forEach((cb) => cb(data as PeerMessage)));
+    c.on('data', (data) => {
+      if (isPeerMessage(data)) messageListeners.forEach((cb) => cb(data));
+    });
     c.on('close', () => {
       setStatus('disconnected');
       scheduleReconnect();
