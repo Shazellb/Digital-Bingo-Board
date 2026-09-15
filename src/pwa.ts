@@ -11,6 +11,7 @@ const UPDATE_RELOAD_MESSAGE = 'bingo:update-reload';
 
 interface PwaUpdateOptions {
   canReload?: () => boolean;
+  reloadPage?: () => void;
 }
 
 function showUpdateToast(): void {
@@ -22,7 +23,7 @@ function showUpdateToast(): void {
   document.body.append(toast);
 }
 
-export function setupPwaUpdates({ canReload = () => true }: PwaUpdateOptions = {}): void {
+export function setupPwaUpdates({ canReload = () => true, reloadPage = () => location.reload() }: PwaUpdateOptions = {}): void {
   if (!('serviceWorker' in navigator)) return;
 
   let hadController = Boolean(navigator.serviceWorker.controller);
@@ -32,7 +33,7 @@ export function setupPwaUpdates({ canReload = () => true }: PwaUpdateOptions = {
     beforeReload: showUpdateToast,
     reload: () => {
       sessionStorage.setItem(RELOAD_GUARD_KEY, guardValue);
-      location.reload();
+      reloadPage();
     },
     schedule: (callback, delayMs) => { window.setTimeout(callback, delayMs); },
   });
@@ -55,6 +56,7 @@ export function setupPwaUpdates({ canReload = () => true }: PwaUpdateOptions = {
   const register = (): void => {
     registerSW({
       immediate: true,
+      onNeedReload: requestReload,
       onRegisteredSW(_swUrl, registered) {
         registration = registered;
         checkForUpdate();

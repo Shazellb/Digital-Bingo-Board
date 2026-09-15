@@ -399,7 +399,7 @@ function render(): void {
               </div>
               <div class="button-row" style="margin-top:12px">
                 <button id="check-winner" class="btn btn-primary">Check winner</button>
-                <button id="applause" class="btn">👏 Applause</button>
+                <button id="applause" class="btn">👏 Cheer</button>
                 ${state.gameStatus === 'won' ? '<button id="new-game" class="btn">Start new game</button>' : '<button id="end-no-winner" class="btn btn-ghost">Reset game</button>'}
               </div>
             </section>
