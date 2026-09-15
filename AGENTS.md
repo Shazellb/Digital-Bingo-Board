@@ -5,6 +5,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - `docs/SPEC.md` is the product acceptance contract; keep the app and tests aligned with it.
 - Use `npm test` and `npm run build` before shipping. GitHub Pages deployment and the required `/Digital-Bingo-Board/` base path are defined in `.github/workflows/pages.yml` and `vite.config.ts`.
 - Controller room codes belong in the URL fragment (`controller.html#CODE`), not the query string, so the multi-page PWA service worker resolves the correct cached document.
+- `display.ts`'s `render()` replaces `#app`'s entire `innerHTML` on almost every state change. Any DOM that must survive across renders (e.g. the confetti canvas in `src/confetti.ts`) is created once and appended outside `#app` (see `confettiCanvas` in `display.ts`), not inside the templated markup.
 
 ## Maintaining this file
 
