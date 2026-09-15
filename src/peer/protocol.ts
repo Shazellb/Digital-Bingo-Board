@@ -19,8 +19,8 @@ export interface SyncPayload {
   audioTarget: AudioTarget;
 }
 
-export interface ClapPayload {
-  type: 'clap';
+export interface ApplausePayload {
+  type: 'applause';
   ts: number;
 }
 
@@ -28,7 +28,30 @@ export interface HelloPayload {
   type: 'hello';
 }
 
-export type PeerMessage = SyncPayload | ClapPayload | HelloPayload;
+export interface SpinPayload {
+  type: 'spin';
+  targetBall: number;
+  durationMs: number;
+}
+
+export interface SpinCancelPayload {
+  type: 'spin-cancel';
+}
+
+export interface ReleasePairingPayload {
+  type: 'release-pairing';
+  controllerSecret: string;
+}
+
+export interface PairingReleasedPayload {
+  type: 'pairing-released';
+}
+
+export interface PairingRejectedPayload {
+  type: 'pairing-rejected';
+}
+
+export type PeerMessage = SyncPayload | ApplausePayload | HelloPayload | SpinPayload | SpinCancelPayload | ReleasePairingPayload | PairingReleasedPayload | PairingRejectedPayload;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -48,8 +71,17 @@ function isWinner(value: unknown): value is WinnerRecord {
 /** Runtime guard for data arriving across the untyped WebRTC boundary. */
 export function isPeerMessage(value: unknown): value is PeerMessage {
   if (!isRecord(value) || typeof value.type !== 'string') return false;
-  if (value.type === 'hello') return true;
-  if (value.type === 'clap') return typeof value.ts === 'number' && Number.isFinite(value.ts);
+  if (value.type === 'hello' || value.type === 'spin-cancel' || value.type === 'pairing-released' || value.type === 'pairing-rejected') return true;
+  if (value.type === 'applause') return typeof value.ts === 'number' && Number.isFinite(value.ts);
+  if (value.type === 'spin') return typeof value.targetBall === 'number'
+    && Number.isInteger(value.targetBall)
+    && value.targetBall >= 1
+    && value.targetBall <= 75
+    && typeof value.durationMs === 'number'
+    && Number.isFinite(value.durationMs)
+    && value.durationMs >= 0
+    && value.durationMs <= 2000;
+  if (value.type === 'release-pairing') return typeof value.controllerSecret === 'string' && value.controllerSecret.length >= 16;
   if (value.type !== 'sync' || !isRecord(value.activePattern)) return false;
 
   const pattern = value.activePattern;

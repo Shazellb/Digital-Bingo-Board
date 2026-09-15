@@ -33,6 +33,20 @@ function getAudioCtx(): AudioContext | null {
   return audioCtx;
 }
 
+/** Call from a user gesture on the Display so later remote-triggered audio is allowed. */
+export async function enableAudio(): Promise<boolean> {
+  const ctx = getAudioCtx();
+  if (!ctx) return false;
+  try {
+    if (ctx.state === 'suspended') await ctx.resume();
+    if ('speechSynthesis' in window) window.speechSynthesis.resume();
+    return ctx.state === 'running';
+  } catch (err) {
+    console.error('[bingo] audio enable failed', err);
+    return false;
+  }
+}
+
 export function playDrawSound(): void {
   const ctx = getAudioCtx();
   if (!ctx) return;
@@ -51,25 +65,43 @@ export function playDrawSound(): void {
   }
 }
 
-export function playClapSound(): void {
+/** A layered, three-second crowd-applause effect synthesized locally with Web Audio. */
+export function playAudienceApplause(): void {
   const ctx = getAudioCtx();
   if (!ctx) return;
   try {
-    const duration = 0.6;
+    const duration = 3.2;
     const bufferSize = Math.floor(ctx.sampleRate * duration);
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      const decay = 1 - i / bufferSize;
-      data[i] = (Math.random() * 2 - 1) * decay * decay;
+    const buffer = ctx.createBuffer(2, bufferSize, ctx.sampleRate);
+    for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+      const data = buffer.getChannelData(channel);
+      for (let i = 0; i < bufferSize; i++) {
+        const time = i / ctx.sampleRate;
+        const crowdEnvelope = Math.min(1, time * 4) * Math.pow(Math.max(0, 1 - time / duration), 0.45);
+        data[i] = (Math.random() * 2 - 1) * crowdEnvelope * 0.12;
+      }
+      for (let clap = 0; clap < 70; clap++) {
+        const start = Math.floor(Math.random() * bufferSize);
+        const clapLength = Math.min(Math.floor(ctx.sampleRate * 0.04), bufferSize - start);
+        for (let offset = 0; offset < clapLength; offset++) {
+          const time = (start + offset) / ctx.sampleRate;
+          const crowdEnvelope = Math.min(1, time * 4) * Math.pow(Math.max(0, 1 - time / duration), 0.45);
+          data[start + offset] += (Math.random() * 2 - 1) * Math.exp(-offset / ctx.sampleRate * 105) * crowdEnvelope * 0.9;
+        }
+      }
     }
     const noise = ctx.createBufferSource();
     noise.buffer = buffer;
+    const bandpass = ctx.createBiquadFilter();
+    bandpass.type = 'bandpass';
+    bandpass.frequency.value = 1450;
+    bandpass.Q.value = 0.55;
     const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.6, ctx.currentTime);
-    noise.connect(gain).connect(ctx.destination);
+    gain.gain.setValueAtTime(0.85, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    noise.connect(bandpass).connect(gain).connect(ctx.destination);
     noise.start();
   } catch (err) {
-    console.error('[bingo] clap sound failed', err);
+    console.error('[bingo] audience applause failed', err);
   }
 }

@@ -1,20 +1,34 @@
 import QRCode from 'qrcode';
-import { playClapSound, speakCall } from './audio';
+import { enableAudio, playAudienceApplause, speakCall } from './audio';
 import { COLUMNS } from './engine/draw';
 import { generateRoomCode } from './engine/roomCode';
 import { createPeerHost, HostStatus } from './peer/peerHost';
 import { SyncPayload } from './peer/protocol';
+import { DrawSpinner } from './spin';
 
 const root = document.querySelector<HTMLDivElement>('#app')!;
 if (!root) throw new Error('Missing app root');
 
 const roomCode = sessionStorage.getItem('bingo:display-room') ?? generateRoomCode();
 sessionStorage.setItem('bingo:display-room', roomCode);
-const host = createPeerHost(roomCode);
+let boundSecret = sessionStorage.getItem('bingo:display-controller-secret');
+const host = createPeerHost(roomCode, {
+  boundSecret,
+  onBindingChange(secret) {
+    boundSecret = secret;
+    if (secret) sessionStorage.setItem('bingo:display-controller-secret', secret);
+    else sessionStorage.removeItem('bingo:display-controller-secret');
+    render();
+  },
+});
 let hostStatus: HostStatus = 'starting';
 let payload: SyncPayload | null = null;
 let qrDataUrl = '';
 let wakeLock: { release(): Promise<void> } | null = null;
+let soundReady = false;
+let spinningLabel: string | null = null;
+let spinningExpectedCount: number | null = null;
+const displaySpinner = new DrawSpinner();
 
 function esc(value: unknown): string {
   return String(value ?? '').replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]!);
@@ -63,13 +77,14 @@ function render(): void {
   };
   const shown = sync ?? emptyPattern;
   const qr = qrDataUrl ? `<img class="qr" src="${qrDataUrl}" alt="QR code to open Controller">` : '';
+  const pairingDetails = boundSecret ? '' : `<div class="room-copy"><small>Pair with room</small><div class="room-code">${roomCode}</div></div>${qr}`;
 
   root.innerHTML = `<main class="display-shell">
     <header class="display-head">
       <div class="display-brand"><h1>Digital Bingo Board</h1><p>${esc(shown.venueName || 'Ready for bingo')}</p></div>
       <div class="room-block">
         <button id="fullscreen" class="btn fullscreen-btn">⛶ Full screen</button>
-        <div class="room-copy"><small>Pair with room</small><div class="room-code">${roomCode}</div></div>${qr}
+        ${pairingDetails}
       </div>
     </header>
     <div class="display-main">
@@ -77,8 +92,8 @@ function render(): void {
       <aside class="display-side">
         <section class="display-panel display-current">
           <span class="display-panel-label">Current call</span>
-          <div class="display-current-value">${current ? `${COLUMNS[Math.floor((current - 1) / 15)]}-${current}` : '—'}</div>
-          <div class="display-count">${called.size} BALL${called.size === 1 ? '' : 'S'} CALLED</div>
+          <div class="display-current-value ${displaySpinner.active ? 'spinning' : ''}" aria-live="polite">${spinningLabel ?? (current ? `${COLUMNS[Math.floor((current - 1) / 15)]}-${current}` : '—')}</div>
+          <div class="display-count">${displaySpinner.active ? 'DRAWING…' : `${called.size} BALL${called.size === 1 ? '' : 'S'} CALLED`}</div>
         </section>
         <section class="display-panel">
           <span class="display-panel-label">Previous calls</span>
@@ -90,18 +105,24 @@ function render(): void {
         </section>
       </aside>
     </div>
-    ${hostStatus !== 'connected' ? `<div class="display-overlay"><div class="display-overlay-card"><h2>${hostStatus === 'error' ? 'Pairing error' : 'Waiting for controller'}</h2><p>On the Controller, enter room <strong class="room-code">${roomCode}</strong></p>${qrDataUrl ? `<img class="qr" style="width:15vh;height:15vh;margin-top:2vh" src="${qrDataUrl}" alt="QR code to open Controller">` : ''}<p>${hostStatus === 'error' ? 'Refresh this Display to create a new room.' : 'Scan the code or open the Controller link.'}</p></div></div>` : ''}
+    ${hostStatus !== 'connected' ? `<div class="display-overlay"><div class="display-overlay-card"><h2>${hostStatus === 'error' ? 'Pairing error' : boundSecret ? 'Reconnecting controller' : 'Waiting for controller'}</h2>${boundSecret ? '<p>This board is locked to its paired Controller.</p>' : `<p>On the Controller, enter room <strong class="room-code">${roomCode}</strong></p>${qrDataUrl ? `<img class="qr" style="width:15vh;height:15vh;margin-top:2vh" src="${qrDataUrl}" alt="QR code to open Controller">` : ''}<p>Scan the code or open the Controller link.</p>`}${hostStatus === 'error' ? '<p>Refresh this Display to create a new room.</p>' : ''}</div></div>` : ''}
+    ${hostStatus === 'connected' && !soundReady ? '<div class="display-overlay sound-overlay"><div class="display-overlay-card"><h2>Enable TV sound</h2><p>Tap or click once so voice calls and applause can play through this Display.</p><button id="enable-sound" class="btn btn-primary sound-enable-btn">Enable sound</button></div></div>' : ''}
     ${sync?.gameStatus === 'won' ? `<div class="display-overlay winner-overlay"><div><h2>BINGO!</h2><p>${esc(sync.winner?.patternName ?? sync.activePattern.name)} · Winning ball ${sync.winner ? `${COLUMNS[Math.floor((sync.winner.winningBall - 1) / 15)]}-${sync.winner.winningBall}` : ''}</p></div></div>` : ''}
   </main>`;
 
   document.querySelector('#fullscreen')?.addEventListener('click', async () => {
     try {
+      soundReady = await enableAudio();
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
       else await document.exitFullscreen();
       await requestWakeLock();
     } catch (error) {
       console.error('[bingo] full screen request failed', error);
     }
+  });
+  document.querySelector('#enable-sound')?.addEventListener('click', async () => {
+    soundReady = await enableAudio();
+    render();
   });
 }
 
@@ -117,23 +138,64 @@ async function requestWakeLock(): Promise<void> {
 
 host.onStatusChange((status) => {
   hostStatus = status;
+  if (status !== 'connected') {
+    displaySpinner.cancel();
+    spinningLabel = null;
+    spinningExpectedCount = null;
+  }
   if (status === 'error') sessionStorage.removeItem('bingo:display-room');
   render();
   if (status === 'connected') void requestWakeLock();
 });
 
 host.onMessage((message) => {
-  if (message.type === 'clap') {
-    playClapSound();
+  if (message.type === 'applause') {
+    playAudienceApplause();
+    return;
+  }
+  if (message.type === 'spin') {
+    displaySpinner.cancel();
+    spinningExpectedCount = (payload?.called.length ?? 0) + 1;
+    displaySpinner.begin(() => message.targetBall, {
+      durationMs: message.durationMs,
+      reducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
+      onTick(label) {
+        spinningLabel = label;
+        const readout = document.querySelector<HTMLElement>('.display-current-value');
+        if (readout) readout.textContent = label;
+      },
+      onLand() {},
+    });
+    render();
+    return;
+  }
+  if (message.type === 'spin-cancel') {
+    displaySpinner.cancel();
+    spinningLabel = null;
+    spinningExpectedCount = null;
+    render();
+    return;
+  }
+  if (message.type === 'release-pairing') {
+    sessionStorage.removeItem('bingo:display-room');
+    sessionStorage.removeItem('bingo:display-controller-secret');
+    setTimeout(() => location.reload(), 150);
     return;
   }
   if (message.type !== 'sync') return;
   const priorCurrent = payload?.called.at(-1);
   const nextCurrent = message.called.at(-1);
   const shouldSpeak = payload !== null && nextCurrent !== undefined && nextCurrent !== priorCurrent && message.called.length >= payload.called.length;
+  const shouldApplaud = payload?.gameStatus !== 'won' && message.gameStatus === 'won';
+  if (spinningExpectedCount !== null && message.called.length >= spinningExpectedCount) {
+    displaySpinner.cancel();
+    spinningLabel = null;
+    spinningExpectedCount = null;
+  }
   payload = message;
   render();
   if (shouldSpeak && message.voiceEnabled && (message.audioTarget === 'display' || message.audioTarget === 'both')) speakCall(nextCurrent!);
+  if (shouldApplaud) playAudienceApplause();
 });
 
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && hostStatus === 'connected') void requestWakeLock(); });

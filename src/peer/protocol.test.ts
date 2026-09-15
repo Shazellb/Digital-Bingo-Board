@@ -22,13 +22,17 @@ function validSync(): SyncPayload {
 describe('isPeerMessage', () => {
   it('accepts valid protocol messages', () => {
     expect(isPeerMessage({ type: 'hello' })).toBe(true);
-    expect(isPeerMessage({ type: 'clap', ts: Date.now() })).toBe(true);
+    expect(isPeerMessage({ type: 'applause', ts: Date.now() })).toBe(true);
+    expect(isPeerMessage({ type: 'spin', targetBall: 42, durationMs: 1500 })).toBe(true);
+    expect(isPeerMessage({ type: 'spin-cancel' })).toBe(true);
+    expect(isPeerMessage({ type: 'release-pairing', controllerSecret: 'controller-secret-123' })).toBe(true);
     expect(isPeerMessage(validSync())).toBe(true);
   });
 
   it('rejects malformed data received from a peer', () => {
     expect(isPeerMessage(null)).toBe(false);
-    expect(isPeerMessage({ type: 'clap', ts: 'now' })).toBe(false);
+    expect(isPeerMessage({ type: 'applause', ts: 'now' })).toBe(false);
+    expect(isPeerMessage({ type: 'spin', targetBall: 76, durationMs: 1500 })).toBe(false);
     expect(isPeerMessage({ ...validSync(), called: [0, 76] })).toBe(false);
     expect(isPeerMessage({ ...validSync(), activePattern: { cells: [] } })).toBe(false);
   });
