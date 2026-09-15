@@ -85,12 +85,18 @@ export class ConfettiController {
     if (!ctx) return;
     const width = window.innerWidth;
     const height = window.innerHeight;
-    ctx.clearRect(0, 0, width, height);
-
     const remainingMs = this.deadline - now;
+
+    if (remainingMs <= 0) {
+      this.rafId = null;
+      this.particles = [];
+      ctx.clearRect(0, 0, width, height);
+      return;
+    }
+
+    ctx.clearRect(0, 0, width, height);
     const gravity = 0.22;
     const drag = 0.995;
-    let alive = false;
 
     for (const p of this.particles) {
       p.vy += gravity;
@@ -98,8 +104,15 @@ export class ConfettiController {
       p.x += p.vx;
       p.y += p.vy;
       p.rotation += p.rotationSpeed;
-      if (p.y > height + 40 || remainingMs <= 0) continue;
-      alive = true;
+      // Recycle pieces that fall off the bottom into a steady rain rather than
+      // ending the whole celebration once the first ballistic arc lands, so the
+      // burst stays visible for its full duration and the fade below actually runs.
+      if (p.y > height + 40) {
+        p.y = -20 - Math.random() * 80;
+        p.x = Math.random() * width;
+        p.vy = 1 + Math.random() * 2;
+        p.vx = (Math.random() - 0.5) * 2;
+      }
 
       ctx.save();
       ctx.translate(p.x, p.y);
@@ -116,13 +129,7 @@ export class ConfettiController {
       ctx.restore();
     }
 
-    if (alive) {
-      this.rafId = requestAnimationFrame(this.step);
-    } else {
-      this.rafId = null;
-      this.particles = [];
-      ctx.clearRect(0, 0, width, height);
-    }
+    this.rafId = requestAnimationFrame(this.step);
   };
 
   /** Stops the animation and wipes the canvas; safe to call at any time. */
