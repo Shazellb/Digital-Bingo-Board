@@ -1,5 +1,7 @@
 import QRCode from 'qrcode';
 import { enableAudio, playAudienceApplause, speakCall } from './audio';
+import { ConfettiController } from './confetti';
+import { ConfettiFireTracker, createSessionConfettiStorage } from './confettiTracker';
 import { DisplaySpinCoordinator } from './displaySpin';
 import { COLUMNS } from './engine/draw';
 import { generateRoomCode } from './engine/roomCode';
@@ -8,8 +10,19 @@ import { SyncPayload } from './peer/protocol';
 import { setupPwaUpdates } from './pwa';
 import { injectBuildLabels } from './version';
 
+function prefersReducedMotion(): boolean {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+}
+
 const root = document.querySelector<HTMLDivElement>('#app')!;
 if (!root) throw new Error('Missing app root');
+
+const confettiCanvas = document.createElement('canvas');
+confettiCanvas.className = 'confetti-canvas';
+confettiCanvas.setAttribute('aria-hidden', 'true');
+document.body.appendChild(confettiCanvas);
+const confetti = new ConfettiController(confettiCanvas);
+const confettiTracker = new ConfettiFireTracker(createSessionConfettiStorage());
 
 const roomCode = sessionStorage.getItem('bingo:display-room') ?? generateRoomCode();
 sessionStorage.setItem('bingo:display-room', roomCode);
@@ -119,7 +132,7 @@ function render(): void {
     </div>
     ${hostStatus !== 'connected' ? `<div class="display-overlay"><div class="display-overlay-card"><h2>${hostStatus === 'error' ? 'Pairing error' : boundSecret ? 'Reconnecting controller' : 'Waiting for controller'}</h2>${boundSecret ? '<p>This board is locked to its paired Controller.</p>' : `<p>On the Controller, enter room <strong class="room-code">${roomCode}</strong></p>${qrDataUrl ? `<img class="qr" style="width:15vh;height:15vh;margin-top:2vh" src="${qrDataUrl}" alt="QR code to open Controller">` : ''}<p>Scan the code or open the Controller link.</p>`}${hostStatus === 'error' ? '<p>Refresh this Display to create a new room.</p>' : ''}</div></div>` : ''}
     ${hostStatus === 'connected' && !soundReady ? '<div class="display-overlay sound-overlay"><div class="display-overlay-card"><h2>Enable TV sound</h2><p>Tap or click once so voice calls and applause can play through this Display.</p><button id="enable-sound" class="btn btn-primary sound-enable-btn">Enable sound</button></div></div>' : ''}
-    ${sync?.gameStatus === 'won' ? `<div class="display-overlay winner-overlay"><div><h2>BINGO!</h2><p>${esc(sync.winner?.patternName ?? sync.activePattern.name)} · Winning ball ${sync.winner ? `${COLUMNS[Math.floor((sync.winner.winningBall - 1) / 15)]}-${sync.winner.winningBall}` : ''}</p></div></div>` : ''}
+    ${sync?.gameStatus === 'won' ? `<div class="display-overlay winner-overlay-bg"></div><div class="winner-overlay-content"><h2>BINGO!</h2><p>${esc(sync.winner?.patternName ?? sync.activePattern.name)} · Winning ball ${sync.winner ? `${COLUMNS[Math.floor((sync.winner.winningBall - 1) / 15)]}-${sync.winner.winningBall}` : ''}</p></div>` : ''}
     <small class="build-label display-build-label" data-build-label></small>
   </main>`;
 
@@ -193,15 +206,19 @@ host.onMessage((message) => {
   const isNewCall = payload !== null && message.called.length > payload.called.length;
   const shouldSpeak = payload !== null && nextCurrent !== undefined && nextCurrent !== priorCurrent && message.called.length >= payload.called.length;
   const shouldApplaud = payload?.gameStatus !== 'won' && message.gameStatus === 'won';
+  const wasWon = payload?.gameStatus === 'won';
+  const shouldFireConfetti = confettiTracker.observe(message.gameStatus, message.winner);
   payload = message;
   displaySpinner.receiveSync(priorCurrent, nextCurrent, isNewCall, window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
   render();
   if (shouldSpeak && message.voiceEnabled && (message.audioTarget === 'display' || message.audioTarget === 'both')) speakCall(nextCurrent!);
   if (shouldApplaud) playAudienceApplause();
+  if (shouldFireConfetti) confetti.fire(prefersReducedMotion());
+  else if (wasWon && message.gameStatus !== 'won') confetti.clear();
 });
 
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && hostStatus === 'connected') void requestWakeLock(); });
-window.addEventListener('beforeunload', () => { void wakeLock?.release(); host.destroy(); });
+window.addEventListener('beforeunload', () => { void wakeLock?.release(); host.destroy(); confetti.destroy(); });
 
 render();
 setupPwaUpdates();

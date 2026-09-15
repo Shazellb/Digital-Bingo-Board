@@ -162,9 +162,11 @@ dialog::backdrop { background: #02060dcc; backdrop-filter: blur(4px); }
 .display-overlay p { margin: 1.5vh 0 0; color: var(--muted); font-size: clamp(18px, 1.8vw, 38px); }
 .sound-overlay { z-index: 7; background: #030813ee; }
 .sound-enable-btn { min-height: 7vh; margin-top: 3vh; padding: 1vh 2vw; font-size: clamp(18px, 1.7vw, 34px); }
-.winner-overlay { background: radial-gradient(circle, #3f2e00e8, #030813f5 65%); }
-.winner-overlay h2 { color: var(--yellow); font-size: clamp(75px, 12vw, 245px); text-shadow: 0 0 4vw #ffd44788; animation: bingo-pop .7s ease-out both; }
-.winner-overlay p { color: white; }
+.winner-overlay-bg { background: radial-gradient(circle, #3f2e00e8, #030813f5 65%); }
+.confetti-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 6; pointer-events: none; }
+.winner-overlay-content { position: absolute; inset: 0; z-index: 7; display: grid; place-items: center; text-align: center; pointer-events: none; padding: 0 3vw; }
+.winner-overlay-content h2 { margin: 0; color: var(--yellow); font-size: clamp(75px, 12vw, 245px); text-shadow: 0 0 4vw #ffd447cc, 0 2px 12px #000c; animation: bingo-pop .7s ease-out both; }
+.winner-overlay-content p { margin: 1.5vh 0 0; color: white; font-size: clamp(18px, 1.8vw, 38px); text-shadow: 0 2px 8px #000c; }
 @keyframes bingo-pop { 0% { transform: scale(.35) rotate(-4deg); opacity: 0; } 75% { transform: scale(1.08) rotate(1deg); } 100% { transform: scale(1); opacity: 1; } }
 @keyframes spin-flash { from { transform: scale(.96); opacity: .72; } to { transform: scale(1.04); opacity: 1; } }
 
