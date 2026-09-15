@@ -58,4 +58,4 @@ The production build uses the GitHub Pages base path `/Digital-Bingo-Board/`. Pu
 
 ## Audio credits
 
-The audience cheer is a 5.5-second excerpt of **“Clapping hurray”** by **starlite** (recording metadata: Zack and friends), sourced from [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Clapping_hurray.ogg). The recording combines applause with people shouting “woo” and “woohoo” and was released into the public domain by its author. The excerpt is converted to MP3 and fades naturally at the end.
+The audience cheer is a 5.5-second excerpt of **“Cheering from the home supporters”** by **BikeMike**, sourced from [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:20060724-assyriska-s%C3%B6dert%C3%A4lje-brommapojkarna-video-heim-fanblock-2.webm). It records home supporters cheering at a football match in front of 1,449 spectators and is available under the [Creative Commons CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/). The excerpt is converted to MP3 and fades naturally at the end.
