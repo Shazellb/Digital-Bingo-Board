@@ -1,5 +1,5 @@
 import QRCode from 'qrcode';
-import { enableAudio, playAudienceApplause, speakCall } from './audio';
+import { enableAudio, playAudienceCheer, speakCall } from './audio';
 import { ConfettiController } from './confetti';
 import { ConfettiFireTracker, createSessionConfettiStorage } from './confettiTracker';
 import { DisplaySpinCoordinator } from './displaySpin';
@@ -178,7 +178,7 @@ host.onStatusChange((status) => {
 
 host.onMessage((message) => {
   if (message.type === 'applause') {
-    playAudienceApplause();
+    playAudienceCheer();
     return;
   }
   if (message.type === 'spin') {
@@ -212,7 +212,7 @@ host.onMessage((message) => {
   displaySpinner.receiveSync(priorCurrent, nextCurrent, isNewCall, window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
   render();
   if (shouldSpeak && message.voiceEnabled && (message.audioTarget === 'display' || message.audioTarget === 'both')) speakCall(nextCurrent!);
-  if (shouldApplaud) playAudienceApplause();
+  if (shouldApplaud) playAudienceCheer();
   if (shouldFireConfetti) confetti.fire(prefersReducedMotion());
   else if (wasWon && message.gameStatus !== 'won') confetti.clear();
 });

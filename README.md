@@ -14,10 +14,10 @@ Open **[Digital Bingo Board](https://shazellb.github.io/Digital-Bingo-Board/)**.
 1. On the computer connected to the TV, open the **Display** link. Select **Full screen**. The Display also requests a screen wake lock when the browser supports it.
 2. On the operator's phone or iPad, open the **Controller** link. Enter the four-character room code shown on the TV, or scan the TV's QR code.
 3. Wait for both screens to say they are connected. The TV hides its room code as soon as the first Controller pairs and locks the room to that device. The paired Controller reconnects automatically after a refresh or network interruption; other devices are rejected.
-4. When the TV asks, select **Enable sound** once. Browsers require this interaction before they allow later voice calls and winner applause through the TV speakers.
+4. When the TV asks, select **Enable sound** once. Browsers require this interaction before they allow later voice calls and winner cheers through the TV speakers.
 5. Select a winning pattern, then draw randomly, call physical balls manually, or start continuous auto draw.
 
-Voice announcements default to the Display so they play through the TV speakers. The Settings tab can move voice to the Controller or play it on both devices; applause always plays on the Display. To hand the board to a different operator, use **Unpair / pair a new device** on the connected Controller and confirm. The Display releases the lock and shows a fresh room code. Closing and reopening the Display tab also starts a fresh room if the paired Controller is lost.
+Voice announcements default to the Display so they play through the TV speakers. The Settings tab can move voice to the Controller or play it on both devices; the audience cheer always plays on the Display. To hand the board to a different operator, use **Unpair / pair a new device** on the connected Controller and confirm. The Display releases the lock and shows a fresh room code. Closing and reopening the Display tab also starts a fresh room if the paired Controller is lost.
 
 ## Updating devices
 
@@ -32,7 +32,7 @@ The app checks for and installs updates automatically, including on a TV left op
 - Quick winner confirmation and pattern-cell card-number verification
 - Sessions that block repeat winning patterns unless the operator explicitly overrides
 - Persistent game state, settings, custom patterns, and filterable game history
-- CSV history export, voice calls, draw feedback, and TV-only crowd applause that also plays when a winner is recorded
+- CSV history export, voice calls, draw feedback, and a TV-only audience cheer that also plays when a winner is recorded
 - Installable PWA with offline-cached application assets
 
 ## Local development
@@ -58,4 +58,4 @@ The production build uses the GitHub Pages base path `/Digital-Bingo-Board/`. Pu
 
 ## Audio credits
 
-The audience cheer is the first six seconds of **“Applause ii”**, recorded by **thore** in a medium-sized auditorium and sourced from [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Applause_ii.ogg). The author released the recording into the public domain. This app uses Wikimedia's MP3 transcode of the recording.
+The audience cheer is a 5.5-second excerpt of **“Clapping hurray”** by **starlite** (recording metadata: Zack and friends), sourced from [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Clapping_hurray.ogg). The recording combines applause with people shouting “woo” and “woohoo” and was released into the public domain by its author. The excerpt is converted to MP3 and fades naturally at the end.

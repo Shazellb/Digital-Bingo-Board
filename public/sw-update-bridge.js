@@ -1,5 +1,6 @@
-/* Reload clients from builds that predate the controllerchange update handler. */
+/* Ask clients missed by the capability check to reload through the page's safety guard. */
 const bingoUpdateCapabilityCache = 'bingo-update-capability';
+const bingoUpdateReloadMessage = 'bingo:update-reload';
 
 self.addEventListener('install', (event) => {
   const shellRequests = ['./', './display.html', './controller.html']
@@ -21,7 +22,7 @@ self.addEventListener('activate', (event) => {
     await new Promise((resolve) => setTimeout(resolve, 1_200));
     const legacyClients = legacyChecks.filter(({ isLegacy }) => isLegacy).map(({ client }) => client);
     setTimeout(() => {
-      for (const client of legacyClients) void client.navigate(client.url);
+      for (const client of legacyClients) client.postMessage({ type: bingoUpdateReloadMessage });
     }, 0);
   })());
 });

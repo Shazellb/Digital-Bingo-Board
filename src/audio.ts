@@ -120,7 +120,7 @@ export function playDrawSound(): void {
   }
 }
 
-export function playAudienceApplause(): void {
+export function playAudienceCheer(): void {
   const ctx = getAudioCtx();
   if (!ctx) return;
   void loadAudienceCheer(ctx).then((buffer) => {
@@ -131,5 +131,5 @@ export function playAudienceApplause(): void {
     source.connect(gain).connect(ctx.destination);
     source.start();
     source.stop(ctx.currentTime + 6);
-  }).catch((error) => console.error('[bingo] audience applause failed', error));
+  }).catch((error) => console.error('[bingo] audience cheer failed', error));
 }
