@@ -35,6 +35,10 @@ button { cursor: pointer; }
 .landing-link-title { display: block; color: var(--cyan); font-weight: 900; font-size: 1.4rem; }
 .landing-link-sub { display: block; color: var(--muted); margin-top: 7px; }
 .landing-steps { padding-left: 22px; color: var(--muted); line-height: 1.6; }
+.build-label { color: #71839d; font-size: .68rem; letter-spacing: .04em; }
+.landing-build-label { display: block; margin-top: 24px; text-align: center; }
+.controller-build-label { display: block; margin-top: 18px; }
+.update-toast { position: fixed; z-index: 100; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 28px); padding: 10px 15px; color: white; background: #172741; border: 1px solid var(--cyan); border-radius: 999px; box-shadow: 0 8px 28px #0009; font-size: .82rem; font-weight: 800; text-align: center; }
 
 /* Controller */
 .controller-body { min-height: 100vh; }
@@ -120,6 +124,7 @@ dialog::backdrop { background: #02060dcc; backdrop-filter: blur(4px); }
 /* Display */
 .display-body { width: 100vw; height: 100vh; overflow: hidden; background: #040912; }
 .display-shell { position: relative; display: grid; grid-template-rows: 10vh minmax(0, 1fr); width: 100vw; height: 100vh; padding: 1.4vh 1.2vw; gap: 1.2vh; background: radial-gradient(circle at 42% 20%, #132b48, #040912 58%); }
+.display-build-label { position: absolute; right: .7vw; bottom: .35vh; z-index: 10; color: #71839d; font-size: clamp(7px, .48vw, 10px); }
 .display-head { display: flex; justify-content: space-between; align-items: center; min-height: 0; padding: 0 1vw; border: 1px solid #2b4265; border-radius: 1.4vh; background: #0b1829dd; }
 .display-brand h1 { margin: 0; font-size: clamp(18px, 2.25vw, 46px); line-height: 1; }
 .display-brand p { margin: .5vh 0 0; color: var(--cyan); font-size: clamp(10px, 1vw, 21px); font-weight: 800; }

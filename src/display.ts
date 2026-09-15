@@ -1,10 +1,12 @@
 import QRCode from 'qrcode';
 import { enableAudio, playAudienceApplause, speakCall } from './audio';
+import { DisplaySpinCoordinator } from './displaySpin';
 import { COLUMNS } from './engine/draw';
 import { generateRoomCode } from './engine/roomCode';
 import { createPeerHost, HostStatus } from './peer/peerHost';
 import { SyncPayload } from './peer/protocol';
-import { DrawSpinner } from './spin';
+import { setupPwaUpdates } from './pwa';
+import { injectBuildLabels } from './version';
 
 const root = document.querySelector<HTMLDivElement>('#app')!;
 if (!root) throw new Error('Missing app root');
@@ -27,8 +29,18 @@ let qrDataUrl = '';
 let wakeLock: { release(): Promise<void> } | null = null;
 let soundReady = false;
 let spinningLabel: string | null = null;
-let spinningExpectedCount: number | null = null;
-const displaySpinner = new DrawSpinner();
+let lastSyncSequence = -1;
+const displaySpinner = new DisplaySpinCoordinator({
+  onTick(label) {
+    spinningLabel = label;
+    const readout = document.querySelector<HTMLElement>('.display-current-value');
+    if (readout) readout.textContent = label;
+  },
+  onLand(_ball, displayedLabel) {
+    spinningLabel = displayedLabel;
+    render();
+  },
+});
 
 function esc(value: unknown): string {
   return String(value ?? '').replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]!);
@@ -108,7 +120,10 @@ function render(): void {
     ${hostStatus !== 'connected' ? `<div class="display-overlay"><div class="display-overlay-card"><h2>${hostStatus === 'error' ? 'Pairing error' : boundSecret ? 'Reconnecting controller' : 'Waiting for controller'}</h2>${boundSecret ? '<p>This board is locked to its paired Controller.</p>' : `<p>On the Controller, enter room <strong class="room-code">${roomCode}</strong></p>${qrDataUrl ? `<img class="qr" style="width:15vh;height:15vh;margin-top:2vh" src="${qrDataUrl}" alt="QR code to open Controller">` : ''}<p>Scan the code or open the Controller link.</p>`}${hostStatus === 'error' ? '<p>Refresh this Display to create a new room.</p>' : ''}</div></div>` : ''}
     ${hostStatus === 'connected' && !soundReady ? '<div class="display-overlay sound-overlay"><div class="display-overlay-card"><h2>Enable TV sound</h2><p>Tap or click once so voice calls and applause can play through this Display.</p><button id="enable-sound" class="btn btn-primary sound-enable-btn">Enable sound</button></div></div>' : ''}
     ${sync?.gameStatus === 'won' ? `<div class="display-overlay winner-overlay"><div><h2>BINGO!</h2><p>${esc(sync.winner?.patternName ?? sync.activePattern.name)} · Winning ball ${sync.winner ? `${COLUMNS[Math.floor((sync.winner.winningBall - 1) / 15)]}-${sync.winner.winningBall}` : ''}</p></div></div>` : ''}
+    <small class="build-label display-build-label" data-build-label></small>
   </main>`;
+
+  injectBuildLabels(root);
 
   document.querySelector('#fullscreen')?.addEventListener('click', async () => {
     try {
@@ -141,7 +156,7 @@ host.onStatusChange((status) => {
   if (status !== 'connected') {
     displaySpinner.cancel();
     spinningLabel = null;
-    spinningExpectedCount = null;
+    lastSyncSequence = -1;
   }
   if (status === 'error') sessionStorage.removeItem('bingo:display-room');
   render();
@@ -154,25 +169,13 @@ host.onMessage((message) => {
     return;
   }
   if (message.type === 'spin') {
-    displaySpinner.cancel();
-    spinningExpectedCount = (payload?.called.length ?? 0) + 1;
-    displaySpinner.begin(() => message.targetBall, {
-      durationMs: message.durationMs,
-      reducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
-      onTick(label) {
-        spinningLabel = label;
-        const readout = document.querySelector<HTMLElement>('.display-current-value');
-        if (readout) readout.textContent = label;
-      },
-      onLand() {},
-    });
+    displaySpinner.receiveSpin(message.targetBall, message.durationMs, window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
     render();
     return;
   }
   if (message.type === 'spin-cancel') {
     displaySpinner.cancel();
     spinningLabel = null;
-    spinningExpectedCount = null;
     render();
     return;
   }
@@ -183,16 +186,15 @@ host.onMessage((message) => {
     return;
   }
   if (message.type !== 'sync') return;
+  if (message.seq <= lastSyncSequence) return;
+  lastSyncSequence = message.seq;
   const priorCurrent = payload?.called.at(-1);
   const nextCurrent = message.called.at(-1);
+  const isNewCall = payload !== null && message.called.length > payload.called.length;
   const shouldSpeak = payload !== null && nextCurrent !== undefined && nextCurrent !== priorCurrent && message.called.length >= payload.called.length;
   const shouldApplaud = payload?.gameStatus !== 'won' && message.gameStatus === 'won';
-  if (spinningExpectedCount !== null && message.called.length >= spinningExpectedCount) {
-    displaySpinner.cancel();
-    spinningLabel = null;
-    spinningExpectedCount = null;
-  }
   payload = message;
+  displaySpinner.receiveSync(priorCurrent, nextCurrent, isNewCall, window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
   render();
   if (shouldSpeak && message.voiceEnabled && (message.audioTarget === 'display' || message.audioTarget === 'both')) speakCall(nextCurrent!);
   if (shouldApplaud) playAudienceApplause();
@@ -202,3 +204,4 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 window.addEventListener('beforeunload', () => { void wakeLock?.release(); host.destroy(); });
 
 render();
+setupPwaUpdates();

@@ -19,6 +19,10 @@ Open **[Digital Bingo Board](https://shazellb.github.io/Digital-Bingo-Board/)**.
 
 Voice announcements default to the Display so they play through the TV speakers. The Settings tab can move voice to the Controller or play it on both devices; applause always plays on the Display. To hand the board to a different operator, use **Unpair / pair a new device** on the connected Controller and confirm. The Display releases the lock and shows a fresh room code. Closing and reopening the Display tab also starts a fresh room if the paired Controller is lost.
 
+## Updating devices
+
+The app checks for and installs updates automatically, including on a TV left open for hours. The small build label on each page shows the installed commit and build date. If a device ever looks out of date, close and reopen the app.
+
 ## Features
 
 - Cryptographically random, no-repeat 75-ball draws with a presentation-only spinner, plus manual call and confirmed un-call
@@ -54,4 +58,4 @@ The production build uses the GitHub Pages base path `/Digital-Bingo-Board/`. Pu
 
 ## Audio credits
 
-Audience applause is synthesized at runtime with the Web Audio API. It contains no third-party recording or licensed audio asset.
+The audience cheer is the first six seconds of **“Applause ii”**, recorded by **thore** in a medium-sized auditorium and sourced from [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Applause_ii.ogg). The author released the recording into the public domain. This app uses Wikimedia's MP3 transcode of the recording.

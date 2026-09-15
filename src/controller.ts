@@ -8,8 +8,10 @@ import { checkCardEntry, quickCheck } from './engine/winnerCheck';
 import { createPeerClient, PeerClient } from './peer/peerClient';
 import { controllerSecretStorageKey, loadOrCreateControllerSecret } from './peer/pairingLock';
 import { SyncPayload } from './peer/protocol';
+import { setupPwaUpdates } from './pwa';
 import { DrawSpinner, spinDurationForInterval } from './spin';
 import { allPatterns, AppState, findPattern, loadAppState, saveAppState, WinnerRecord } from './state/appState';
+import { injectBuildLabels } from './version';
 
 const root = document.querySelector<HTMLDivElement>('#app')!;
 if (!root) throw new Error('Missing app root');
@@ -438,6 +440,7 @@ function render(): void {
             <label class="inline-check"><input id="draw-sound" type="checkbox" ${state.settings.drawSoundEnabled ? 'checked' : ''}> Draw sound effect</label>
           </div>
           <div class="button-row" style="margin-top:14px"><button id="test-voice" class="btn">Test voice</button></div>
+          <small class="build-label controller-build-label" data-build-label></small>
         </div>
       </section>
 
@@ -466,6 +469,7 @@ function render(): void {
       ${patternGrid({ id: 'editor', name: '', cells: editorCells, builtIn: false }, true)}
       <div class="dialog-actions"><button class="btn btn-ghost" data-close-dialog="pattern-dialog">Cancel</button><button id="save-pattern" class="btn btn-primary">Save pattern</button></div>
     </div></dialog>`;
+  injectBuildLabels(root);
   bindEvents();
 }
 
@@ -538,5 +542,6 @@ function bindEvents(): void {
 
 render();
 if (roomCode) connect(roomCode);
+setupPwaUpdates({ canReload: () => !drawSpinner.active });
 
 window.addEventListener('beforeunload', () => peer?.destroy());
