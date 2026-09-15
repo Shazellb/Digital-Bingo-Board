@@ -32,7 +32,7 @@ Voice announcements default to the Display so they play through the TV speakers.
 
 ## Local development
 
-Requires Node.js 20 or newer.
+Requires Node.js 24 or newer.
 
 ```sh
 npm ci
