@@ -1,4 +1,4 @@
-import { playClapSound, playDrawSound, speakCall, speakTest } from './audio';
+import { playDrawSound, speakCall, speakTest } from './audio';
 import { COLUMNS, columnOf, createDrawEngine, drawNext } from './engine/draw';
 import { addHistoryEntry, clearHistory, filterBySession, loadHistory, toCsv } from './engine/history';
 import { createCustomPattern, FREE_INDEX, Pattern, patternColumns } from './engine/patterns';
@@ -6,8 +6,10 @@ import { normalizeRoomCode } from './engine/roomCode';
 import { createSession, isPatternBlocked, recordWin } from './engine/session';
 import { checkCardEntry, quickCheck } from './engine/winnerCheck';
 import { createPeerClient, PeerClient } from './peer/peerClient';
+import { controllerSecretStorageKey, loadOrCreateControllerSecret } from './peer/pairingLock';
 import { SyncPayload } from './peer/protocol';
-import { allPatterns, AppState, findPattern, loadAppState, saveAppState } from './state/appState';
+import { DrawSpinner, spinDurationForInterval } from './spin';
+import { allPatterns, AppState, findPattern, loadAppState, saveAppState, WinnerRecord } from './state/appState';
 
 const root = document.querySelector<HTMLDivElement>('#app')!;
 if (!root) throw new Error('Missing app root');
@@ -16,6 +18,7 @@ let state: AppState = loadAppState();
 let peer: PeerClient | null = null;
 let connectionStatus = 'Not paired';
 let roomCode = normalizeRoomCode(location.hash.slice(1) || new URLSearchParams(location.search).get('room') || localStorage.getItem('bingo:last-room') || '');
+let controllerSecret: string | null = null;
 let autoTimer: number | null = null;
 let autoPaused = false;
 let sequence = 0;
@@ -26,6 +29,9 @@ let editorPatternId: string | null = null;
 let editorCells = new Array<boolean>(25).fill(false);
 let winnerMode: 'quick' | 'card' = 'quick';
 let cardNumbers = new Array<number | null>(25).fill(null);
+const drawSpinner = new DrawSpinner();
+let pendingBall: number | null = null;
+let spinningLabel: string | null = null;
 
 function esc(value: unknown): string {
   return String(value ?? '').replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]!);
@@ -47,7 +53,7 @@ function sendSync(): void {
     seq: ++sequence,
     venueName: state.settings.venueName,
     sessionLabel: state.session.label,
-    called: [...state.drawEngine.called],
+    called: pendingBall === null ? [...state.drawEngine.called] : state.drawEngine.called.slice(0, -1),
     activePattern: activePattern(),
     smartDrawEnabled: state.smartDrawEnabled,
     autoDrawing: autoTimer !== null,
@@ -69,15 +75,17 @@ function connect(code: string): void {
   peer?.destroy();
   roomCode = normalized;
   localStorage.setItem('bingo:last-room', roomCode);
+  controllerSecret = loadOrCreateControllerSecret(roomCode);
   connectionStatus = 'Connecting';
-  peer = createPeerClient(roomCode);
+  peer = createPeerClient(roomCode, controllerSecret);
   peer.onStatusChange((status) => {
-    connectionStatus = status === 'connected' ? 'Connected' : status === 'connecting' ? 'Connecting' : status === 'error' ? 'Connection error — retrying' : 'Disconnected — retrying';
+    connectionStatus = status === 'connected' ? 'Connected' : status === 'connecting' ? 'Connecting' : status === 'rejected' ? 'Pairing rejected — Display is locked' : status === 'error' ? 'Connection error — retrying' : 'Disconnected — retrying';
     render();
     if (status === 'connected') sendSync();
   });
   peer.onMessage((message) => {
     if (message.type === 'hello') sendSync();
+    if (message.type === 'pairing-released') finishUnpair();
   });
   render();
 }
@@ -90,20 +98,55 @@ function stopAuto(paused: boolean): void {
   render();
 }
 
+function reducedMotion(): boolean {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+}
+
+function updateSpinningReadout(label: string): void {
+  spinningLabel = label;
+  const readout = document.querySelector<HTMLElement>('.current-value');
+  if (readout) readout.textContent = label;
+}
+
+function cancelPendingSpin(): void {
+  if (drawSpinner.active) peer?.send({ type: 'spin-cancel' });
+  drawSpinner.cancel();
+  pendingBall = null;
+  spinningLabel = null;
+}
+
 function performDraw(): boolean {
-  if (state.gameStatus === 'won') return false;
+  if (state.gameStatus === 'won' || drawSpinner.active) return false;
   const pattern = activePattern();
   const allowedColumns = state.smartDrawEnabled ? patternColumns(pattern) : undefined;
-  const n = drawNext(state.drawEngine, { allowedColumns });
-  if (n === null) {
+  const durationMs = reducedMotion() ? 0 : spinDurationForInterval(state.settings.intervalMs);
+  let exhausted = false;
+  const started = drawSpinner.begin(() => {
+    const ball = drawNext(state.drawEngine, { allowedColumns });
+    if (ball === null) exhausted = true;
+    else pendingBall = ball;
+    return ball;
+  }, {
+    durationMs,
+    reducedMotion: durationMs === 0,
+    onTick: updateSpinningReadout,
+    onLand: (ball) => {
+      pendingBall = null;
+      spinningLabel = null;
+      state.gameStatus = 'playing';
+      if (state.settings.drawSoundEnabled) playDrawSound();
+      if (state.settings.voiceEnabled && (state.settings.audioTarget === 'controller' || state.settings.audioTarget === 'both')) speakCall(ball);
+      persistAndSync();
+      render();
+    },
+  });
+  if (exhausted) {
     stopAuto(false);
     alert(state.smartDrawEnabled ? 'No uncalled balls remain in this pattern’s columns.' : 'All 75 balls have been called.');
     return false;
   }
-  state.gameStatus = 'playing';
-  if (state.settings.drawSoundEnabled) playDrawSound();
-  if (state.settings.voiceEnabled && (state.settings.audioTarget === 'controller' || state.settings.audioTarget === 'both')) speakCall(n);
-  persistAndSync();
+  if (!started) return false;
+  if (durationMs > 0 && pendingBall !== null) peer?.send({ type: 'spin', targetBall: pendingBall, durationMs });
   render();
   return true;
 }
@@ -118,6 +161,7 @@ function startAuto(): void {
 }
 
 function toggleManualCall(n: number): void {
+  if (drawSpinner.active) return;
   const calledIndex = state.drawEngine.called.indexOf(n);
   if (calledIndex >= 0) {
     if (!confirm(`Un-call ${columnOf(n)}-${n}? This corrects a mistake and returns the ball to the pool.`)) return;
@@ -137,6 +181,7 @@ function toggleManualCall(n: number): void {
 
 function resetGame(): void {
   stopAuto(false);
+  cancelPendingSpin();
   state.drawEngine = createDrawEngine();
   state.gameStatus = 'idle';
   state.winner = null;
@@ -164,6 +209,7 @@ function selectPattern(id: string): void {
 }
 
 function openWinnerDialog(): void {
+  if (drawSpinner.active) return;
   if (state.drawEngine.called.length === 0) {
     alert('Call at least one ball before checking a winner.');
     return;
@@ -205,13 +251,13 @@ function recordWinner(): void {
   }
   const note = (document.querySelector<HTMLInputElement>('#winner-note')?.value ?? '').trim();
   const winningBall = state.drawEngine.called.at(-1) ?? 0;
-  const winner = {
+  const winner: WinnerRecord = {
     patternId: pattern.id,
     patternName: pattern.name,
     winningBall,
     ballsCalledCount: state.drawEngine.called.length,
     timestamp: Date.now(),
-    note: note || undefined,
+    ...(note ? { note } : {}),
     overridden: wasBlocked || activeOverride,
   };
   state.winner = winner;
@@ -224,6 +270,23 @@ function recordWinner(): void {
   persistAndSync();
   document.querySelector<HTMLDialogElement>('#winner-dialog')?.close();
   render();
+}
+
+function finishUnpair(): void {
+  peer?.destroy();
+  peer = null;
+  if (roomCode) localStorage.removeItem(controllerSecretStorageKey(roomCode));
+  localStorage.removeItem('bingo:last-room');
+  history.replaceState(null, '', location.pathname);
+  roomCode = '';
+  controllerSecret = null;
+  connectionStatus = 'Not paired';
+  render();
+}
+
+function unpair(): void {
+  if (!peer || !controllerSecret || !confirm('Unpair this Controller and let the Display create a fresh room code?')) return;
+  peer.send({ type: 'release-pairing', controllerSecret });
 }
 
 function openPatternEditor(pattern?: Pattern): void {
@@ -275,12 +338,12 @@ function patternGrid(pattern: Pattern, editable = false): string {
 }
 
 function ballButtons(): string {
-  const called = new Set(state.drawEngine.called);
+  const called = new Set(pendingBall === null ? state.drawEngine.called : state.drawEngine.called.slice(0, -1));
   return COLUMNS.map((column, columnIndex) => {
     const start = columnIndex * 15 + 1;
     return `<div class="ball-letter">${column}</div>${Array.from({ length: 15 }, (_, index) => {
       const n = start + index;
-      return `<button type="button" class="ball-btn ${called.has(n) ? 'called' : ''}" data-ball="${n}" aria-pressed="${called.has(n)}" aria-label="${called.has(n) ? 'Un-call' : 'Call'} ${column} ${n}">${n}</button>`;
+      return `<button type="button" class="ball-btn ${called.has(n) ? 'called' : ''}" data-ball="${n}" aria-pressed="${called.has(n)}" aria-label="${called.has(n) ? 'Un-call' : 'Call'} ${column} ${n}" ${drawSpinner.active ? 'disabled' : ''}>${n}</button>`;
     }).join('')}`;
   }).join('');
 }
@@ -293,8 +356,9 @@ function historyHtml(): string {
 
 function render(): void {
   const pattern = activePattern();
-  const calledCount = state.drawEngine.called.length;
-  const current = state.drawEngine.called.at(-1);
+  const visibleCalled = pendingBall === null ? state.drawEngine.called : state.drawEngine.called.slice(0, -1);
+  const calledCount = visibleCalled.length;
+  const current = visibleCalled.at(-1);
   const patternBlocked = isPatternBlocked(state.session, pattern.id);
   const connectionClass = connectionStatus === 'Connected' ? 'connected' : connectionStatus.includes('error') ? 'error' : '';
   const patterns = allPatterns(state);
@@ -306,8 +370,8 @@ function render(): void {
         <span class="connection-pill ${connectionClass}">${esc(connectionStatus)}</span>
       </header>
       <section class="pair-bar" aria-label="Display pairing">
-        <label><span class="field-label">Display room code</span><input id="room-code" class="room-input" inputmode="text" maxlength="8" value="${esc(roomCode)}" placeholder="ABCD" autocomplete="off"></label>
-        <button id="pair-button" class="btn btn-primary" type="button">${peer ? 'Reconnect' : 'Pair display'}</button>
+        <label><span class="field-label">Display room code</span><input id="room-code" class="room-input" inputmode="text" maxlength="8" value="${esc(roomCode)}" placeholder="ABCD" autocomplete="off" ${connectionStatus === 'Connected' ? 'readonly' : ''}></label>
+        ${connectionStatus === 'Connected' ? '<button id="unpair" class="btn btn-danger" type="button">Unpair / pair a new device</button>' : `<button id="pair-button" class="btn btn-primary" type="button">${peer ? 'Reconnect' : 'Pair display'}</button>`}
         <a class="btn btn-ghost" href="./display.html" target="_blank">Open Display</a>
       </section>
 
@@ -321,9 +385,9 @@ function render(): void {
             <section class="panel">
               <div class="panel-head"><h2>Game controls</h2><span class="status-chip">${state.gameStatus === 'won' ? 'BINGO — Game over' : autoTimer !== null ? 'Auto drawing' : autoPaused ? 'Paused' : state.gameStatus === 'playing' ? 'In progress' : 'Ready'}</span></div>
               <div class="control-hero">
-                <div class="current-card"><div><span class="current-value">${current ? `${columnOf(current)}-${current}` : '—'}</span><span class="current-meta">${calledCount} ball${calledCount === 1 ? '' : 's'} called</span></div></div>
+                <div class="current-card ${drawSpinner.active ? 'spinning' : ''}"><div><span class="current-value" aria-live="polite">${spinningLabel ?? (current ? `${columnOf(current)}-${current}` : '—')}</span><span class="current-meta">${drawSpinner.active ? 'Drawing…' : `${calledCount} ball${calledCount === 1 ? '' : 's'} called`}</span></div></div>
                 <div class="draw-controls">
-                  <button id="draw" class="draw-btn" ${state.gameStatus === 'won' ? 'disabled' : ''}>DRAW</button>
+                  <button id="draw" class="draw-btn" ${state.gameStatus === 'won' || drawSpinner.active ? 'disabled' : ''}>${drawSpinner.active ? 'SPINNING…' : 'DRAW'}</button>
                   <div class="auto-row">
                     ${autoTimer !== null ? '<button id="pause-auto" class="btn btn-danger">Pause auto</button>' : `<button id="start-auto" class="btn btn-primary" ${state.gameStatus === 'won' ? 'disabled' : ''}>${autoPaused ? 'Resume auto' : 'Start auto'}</button>`}
                     <select id="interval" aria-label="Auto draw interval">${[1, 2, 3, 5, 10].map((seconds) => `<option value="${seconds * 1000}" ${state.settings.intervalMs === seconds * 1000 ? 'selected' : ''}>${seconds} sec</option>`).join('')}</select>
@@ -333,7 +397,7 @@ function render(): void {
               </div>
               <div class="button-row" style="margin-top:12px">
                 <button id="check-winner" class="btn btn-primary">Check winner</button>
-                <button id="clap" class="btn">👏 Clap</button>
+                <button id="applause" class="btn">👏 Applause</button>
                 ${state.gameStatus === 'won' ? '<button id="new-game" class="btn">Start new game</button>' : '<button id="end-no-winner" class="btn btn-ghost">Reset game</button>'}
               </div>
             </section>
@@ -407,12 +471,13 @@ function render(): void {
 
 function bindEvents(): void {
   document.querySelector('#pair-button')?.addEventListener('click', () => connect(document.querySelector<HTMLInputElement>('#room-code')?.value ?? ''));
+  document.querySelector('#unpair')?.addEventListener('click', unpair);
   document.querySelector('#room-code')?.addEventListener('keydown', (event) => { if ((event as KeyboardEvent).key === 'Enter') document.querySelector<HTMLButtonElement>('#pair-button')?.click(); });
   document.querySelector('#draw')?.addEventListener('click', performDraw);
   document.querySelector('#start-auto')?.addEventListener('click', startAuto);
   document.querySelector('#pause-auto')?.addEventListener('click', () => stopAuto(true));
   document.querySelector('#check-winner')?.addEventListener('click', openWinnerDialog);
-  document.querySelector('#clap')?.addEventListener('click', () => { playClapSound(); peer?.send({ type: 'clap', ts: Date.now() }); });
+  document.querySelector('#applause')?.addEventListener('click', () => peer?.send({ type: 'applause', ts: Date.now() }));
   document.querySelector('#new-game')?.addEventListener('click', resetGame);
   document.querySelector('#end-no-winner')?.addEventListener('click', () => { if (state.drawEngine.called.length === 0 || confirm('Reset this game without recording a winner?')) resetGame(); });
   document.querySelector('#new-session')?.addEventListener('click', () => {
@@ -420,6 +485,7 @@ function bindEvents(): void {
     if (!label) return;
     if (state.drawEngine.called.length > 0 && !confirm('Starting a new session also resets the current game. Continue?')) return;
     stopAuto(false);
+    cancelPendingSpin();
     state.session = createSession(label);
     state.drawEngine = createDrawEngine();
     state.gameStatus = 'idle';

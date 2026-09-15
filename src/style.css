@@ -70,6 +70,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--cyan); outl
 .control-hero { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .current-card { display: grid; place-items: center; min-height: 126px; border-radius: 15px; background: #081427; border: 1px solid var(--line); text-align: center; }
 .current-card .current-value { display: block; color: var(--yellow); font-size: clamp(2.5rem, 10vw, 5.4rem); line-height: .9; font-weight: 1000; text-shadow: 0 0 28px #ffd44755; }
+.current-card.spinning { border-color: var(--yellow); box-shadow: inset 0 0 32px #ffd44722; }
+.current-card.spinning .current-value, .display-current-value.spinning { animation: spin-flash .16s ease-in-out infinite alternate; }
 .current-card .current-meta { display: block; color: var(--muted); margin-top: 8px; font-size: .78rem; text-transform: uppercase; letter-spacing: .1em; }
 .draw-controls { display: grid; gap: 9px; }
 .draw-btn { min-height: 76px; border: 0; border-radius: 15px; color: var(--ink); background: linear-gradient(145deg, #ffe36e, #ffc62b); font-size: clamp(1.35rem, 4vw, 2rem); font-weight: 1000; box-shadow: 0 7px 0 #a87700; }
@@ -153,10 +155,13 @@ dialog::backdrop { background: #02060dcc; backdrop-filter: blur(4px); }
 .display-overlay-card { padding: 5vh 5vw; border: 2px solid var(--cyan); background: #0b192cf2; border-radius: 3vh; box-shadow: 0 0 5vw #27dbef33; }
 .display-overlay h2 { margin: 0; color: var(--cyan); font-size: clamp(38px, 5vw, 100px); }
 .display-overlay p { margin: 1.5vh 0 0; color: var(--muted); font-size: clamp(18px, 1.8vw, 38px); }
+.sound-overlay { z-index: 7; background: #030813ee; }
+.sound-enable-btn { min-height: 7vh; margin-top: 3vh; padding: 1vh 2vw; font-size: clamp(18px, 1.7vw, 34px); }
 .winner-overlay { background: radial-gradient(circle, #3f2e00e8, #030813f5 65%); }
 .winner-overlay h2 { color: var(--yellow); font-size: clamp(75px, 12vw, 245px); text-shadow: 0 0 4vw #ffd44788; animation: bingo-pop .7s ease-out both; }
 .winner-overlay p { color: white; }
 @keyframes bingo-pop { 0% { transform: scale(.35) rotate(-4deg); opacity: 0; } 75% { transform: scale(1.08) rotate(1deg); } 100% { transform: scale(1); opacity: 1; } }
+@keyframes spin-flash { from { transform: scale(.96); opacity: .72; } to { transform: scale(1.04); opacity: 1; } }
 
 @media (max-width: 780px) {
   .landing-links, .controller-grid, .control-hero { grid-template-columns: 1fr; }

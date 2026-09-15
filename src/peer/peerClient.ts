@@ -2,7 +2,7 @@ import Peer, { DataConnection } from 'peerjs';
 import { roomCodeToPeerId } from '../engine/roomCode';
 import { isPeerMessage, PeerMessage } from './protocol';
 
-export type ClientStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
+export type ClientStatus = 'connecting' | 'connected' | 'disconnected' | 'error' | 'rejected';
 
 export interface PeerClient {
   readonly status: ClientStatus;
@@ -15,7 +15,7 @@ export interface PeerClient {
 const RECONNECT_DELAY_MS = 2000;
 
 /** Controller side: connects out to the Display's peer id and auto-reconnects if the link drops. */
-export function createPeerClient(roomCode: string): PeerClient {
+export function createPeerClient(roomCode: string, controllerSecret: string): PeerClient {
   const targetId = roomCodeToPeerId(roomCode);
   const peer = new Peer();
   let conn: DataConnection | null = null;
@@ -41,13 +41,19 @@ export function createPeerClient(roomCode: string): PeerClient {
   function connectOut() {
     if (destroyed) return;
     setStatus('connecting');
-    const c = peer.connect(targetId, { reliable: true });
+    const c = peer.connect(targetId, { reliable: true, metadata: { controllerSecret } });
     conn = c;
     c.on('open', () => setStatus('connected'));
     c.on('data', (data) => {
-      if (isPeerMessage(data)) messageListeners.forEach((cb) => cb(data));
+      if (!isPeerMessage(data)) return;
+      if (data.type === 'pairing-rejected') {
+        setStatus('rejected');
+        destroyed = true;
+      }
+      messageListeners.forEach((cb) => cb(data));
     });
     c.on('close', () => {
+      if (destroyed) return;
       setStatus('disconnected');
       scheduleReconnect();
     });
