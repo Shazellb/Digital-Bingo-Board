@@ -1,23 +1,39 @@
 import { columnOf } from './engine/draw';
 
-export function announcementText(n: number): string {
-  return `${columnOf(n)}. ${n}`;
+const SPOKEN_COLUMNS = {
+  B: 'Bee',
+  I: 'Eye',
+  N: 'En',
+  G: 'Gee',
+  O: 'Oh',
+} as const;
+
+export function announcementParts(n: number): [letter: string, number: string] {
+  return [SPOKEN_COLUMNS[columnOf(n)], String(n)];
 }
 
-export function speak(text: string): void {
+function speakParts(parts: string[]): void {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
   try {
     window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.rate = 0.9;
-    window.speechSynthesis.speak(utter);
+    const language = document.documentElement.lang || 'en-US';
+    for (const part of parts) {
+      const utter = new SpeechSynthesisUtterance(part);
+      utter.lang = language;
+      utter.rate = 1.1;
+      window.speechSynthesis.speak(utter);
+    }
   } catch (err) {
     console.error('[bingo] speech synthesis failed', err);
   }
 }
 
+export function speak(text: string): void {
+  speakParts([text]);
+}
+
 export function speakCall(n: number): void {
-  speak(announcementText(n));
+  speakParts(announcementParts(n));
 }
 
 export function speakTest(): void {
