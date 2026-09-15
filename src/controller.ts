@@ -9,7 +9,7 @@ import { createPeerClient, PeerClient } from './peer/peerClient';
 import { controllerSecretStorageKey, loadOrCreateControllerSecret } from './peer/pairingLock';
 import { SyncPayload } from './peer/protocol';
 import { DrawSpinner, spinDurationForInterval } from './spin';
-import { allPatterns, AppState, findPattern, loadAppState, saveAppState } from './state/appState';
+import { allPatterns, AppState, findPattern, loadAppState, saveAppState, WinnerRecord } from './state/appState';
 
 const root = document.querySelector<HTMLDivElement>('#app')!;
 if (!root) throw new Error('Missing app root');
@@ -251,13 +251,13 @@ function recordWinner(): void {
   }
   const note = (document.querySelector<HTMLInputElement>('#winner-note')?.value ?? '').trim();
   const winningBall = state.drawEngine.called.at(-1) ?? 0;
-  const winner = {
+  const winner: WinnerRecord = {
     patternId: pattern.id,
     patternName: pattern.name,
     winningBall,
     ballsCalledCount: state.drawEngine.called.length,
     timestamp: Date.now(),
-    note: note || undefined,
+    ...(note ? { note } : {}),
     overridden: wasBlocked || activeOverride,
   };
   state.winner = winner;

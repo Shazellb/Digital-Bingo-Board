@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { pack, Packable, unpack } from 'peerjs-js-binarypack';
 import { isPeerMessage, SyncPayload } from './protocol';
 
 function validSync(): SyncPayload {
@@ -35,5 +36,28 @@ describe('isPeerMessage', () => {
     expect(isPeerMessage({ type: 'spin', targetBall: 76, durationMs: 1500 })).toBe(false);
     expect(isPeerMessage({ ...validSync(), called: [0, 76] })).toBe(false);
     expect(isPeerMessage({ ...validSync(), activePattern: { cells: [] } })).toBe(false);
+  });
+
+  it('accepts a no-note winner after PeerJS BinaryPack round-trip', async () => {
+    const message = {
+      ...validSync(),
+      gameStatus: 'won',
+      winner: {
+        patternId: 'row-0',
+        patternName: 'Row',
+        winningBall: 20,
+        ballsCalledCount: 2,
+        timestamp: 1_700_000_000_000,
+        note: undefined,
+        overridden: undefined,
+      },
+    };
+
+    const packed = await pack(message as unknown as Packable);
+    expect(packed).toBeInstanceOf(ArrayBuffer);
+    const roundTripped = unpack(packed as ArrayBuffer);
+
+    expect(roundTripped).toMatchObject({ winner: { note: null, overridden: null } });
+    expect(isPeerMessage(roundTripped)).toBe(true);
   });
 });

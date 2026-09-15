@@ -2,6 +2,12 @@ import { Pattern } from '../engine/patterns';
 import { GameStatus, WinnerRecord } from '../state/appState';
 import { AudioTarget } from '../state/appState';
 
+/** PeerJS BinaryPack serializes present `undefined` properties as `null`. */
+export interface WinnerPayload extends Omit<WinnerRecord, 'note' | 'overridden'> {
+  note?: string | null;
+  overridden?: boolean | null;
+}
+
 /** Full state snapshot the Controller pushes to the Display on every change and on (re)connect. */
 export interface SyncPayload {
   type: 'sync';
@@ -14,7 +20,7 @@ export interface SyncPayload {
   autoDrawing: boolean;
   autoPaused: boolean;
   gameStatus: GameStatus;
-  winner: WinnerRecord | null;
+  winner: WinnerPayload | null;
   voiceEnabled: boolean;
   audioTarget: AudioTarget;
 }
@@ -57,15 +63,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function isWinner(value: unknown): value is WinnerRecord {
+function isWinner(value: unknown): value is WinnerPayload {
   if (!isRecord(value)) return false;
   return typeof value.patternId === 'string'
     && typeof value.patternName === 'string'
     && Number.isInteger(value.winningBall)
     && Number.isInteger(value.ballsCalledCount)
     && typeof value.timestamp === 'number'
-    && (value.note === undefined || typeof value.note === 'string')
-    && (value.overridden === undefined || typeof value.overridden === 'boolean');
+    && (value.note == null || typeof value.note === 'string')
+    && (value.overridden == null || typeof value.overridden === 'boolean');
 }
 
 /** Runtime guard for data arriving across the untyped WebRTC boundary. */
