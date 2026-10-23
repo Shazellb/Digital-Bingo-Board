@@ -1,5 +1,5 @@
 import { playDrawSound, speakCall, speakTest } from './audio';
-import { COLUMNS, columnOf, createDrawEngine, drawNext } from './engine/draw';
+import { COLUMNS, columnOf, createDrawEngine, drawNext, undoLastDraw } from './engine/draw';
 import { addHistoryEntry, clearHistory, filterBySession, loadHistory, toCsv } from './engine/history';
 import { createCustomPattern, FREE_INDEX, Pattern, patternColumns } from './engine/patterns';
 import { normalizeRoomCode } from './engine/roomCode';
@@ -177,6 +177,14 @@ function toggleManualCall(n: number): void {
     if (state.settings.drawSoundEnabled) playDrawSound();
     if (state.settings.voiceEnabled && (state.settings.audioTarget === 'controller' || state.settings.audioTarget === 'both')) speakCall(n);
   }
+  persistAndSync();
+  render();
+}
+
+function undoLastCall(): void {
+  if (drawSpinner.active || state.gameStatus === 'won') return;
+  if (undoLastDraw(state.drawEngine) === null) return;
+  if (state.drawEngine.called.length === 0) state.gameStatus = 'idle';
   persistAndSync();
   render();
 }
@@ -398,6 +406,7 @@ function render(): void {
                 </div>
               </div>
               <div class="button-row" style="margin-top:12px">
+                <button id="undo-draw" class="btn" ${state.drawEngine.called.length === 0 || state.gameStatus === 'won' || drawSpinner.active ? 'disabled' : ''}>Undo last draw</button>
                 <button id="check-winner" class="btn btn-primary">Check winner</button>
                 <button id="applause" class="btn">👏 Cheer</button>
                 ${state.gameStatus === 'won' ? '<button id="new-game" class="btn">Start new game</button>' : '<button id="end-no-winner" class="btn btn-ghost">Reset game</button>'}
@@ -478,6 +487,7 @@ function bindEvents(): void {
   document.querySelector('#unpair')?.addEventListener('click', unpair);
   document.querySelector('#room-code')?.addEventListener('keydown', (event) => { if ((event as KeyboardEvent).key === 'Enter') document.querySelector<HTMLButtonElement>('#pair-button')?.click(); });
   document.querySelector('#draw')?.addEventListener('click', performDraw);
+  document.querySelector('#undo-draw')?.addEventListener('click', undoLastCall);
   document.querySelector('#start-auto')?.addEventListener('click', startAuto);
   document.querySelector('#pause-auto')?.addEventListener('click', () => stopAuto(true));
   document.querySelector('#check-winner')?.addEventListener('click', openWinnerDialog);
