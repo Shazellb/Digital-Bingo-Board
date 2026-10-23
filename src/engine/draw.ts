@@ -58,6 +58,15 @@ export function drawNext(state: DrawEngineState, opts: DrawOptions = {}): number
   return n;
 }
 
+/** Returns the most recent call to the available pool. */
+export function undoLastDraw(state: DrawEngineState): number | null {
+  const n = state.called.pop();
+  if (n === undefined) return null;
+  state.remaining.push(n);
+  state.remaining.sort((a, b) => a - b);
+  return n;
+}
+
 export function callsRemaining(state: DrawEngineState): number {
   return state.remaining.length;
 }
