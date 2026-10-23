@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { columnOf, createDrawEngine, drawNext } from './draw';
+import { columnOf, createDrawEngine, drawNext, undoLastDraw } from './draw';
 
 describe('columnOf', () => {
   it('maps ball numbers to the correct column', () => {
@@ -62,6 +62,18 @@ describe('drawNext', () => {
     expect(n).toBe(1);
     const n2 = drawNext(state, { random: () => 0 });
     expect(n2).toBe(2);
+  });
+
+  it('restores only the most recently drawn ball to the pool', () => {
+    const state = createDrawEngine();
+    drawNext(state, { random: () => 0 });
+    drawNext(state, { random: () => 0 });
+
+    expect(undoLastDraw(state)).toBe(2);
+    expect(state.called).toEqual([1]);
+    expect(state.remaining).toContain(2);
+    expect(state.remaining).toHaveLength(74);
+    expect(undoLastDraw(createDrawEngine())).toBeNull();
   });
 
   it('draws every ball in a column-restricted game without repeats', () => {

@@ -58,6 +58,15 @@ export function drawNext(state: DrawEngineState, opts: DrawOptions = {}): number
   return n;
 }
 
+/** Restores the most recently called ball so it can be drawn again. */
+export function undoLastDraw(state: DrawEngineState): number | null {
+  const ball = state.called.pop();
+  if (ball === undefined) return null;
+  state.remaining.push(ball);
+  state.remaining.sort((a, b) => a - b);
+  return ball;
+}
+
 export function callsRemaining(state: DrawEngineState): number {
   return state.remaining.length;
 }

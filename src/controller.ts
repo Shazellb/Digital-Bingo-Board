@@ -1,5 +1,5 @@
 import { playDrawSound, speakCall, speakTest } from './audio';
-import { COLUMNS, columnOf, createDrawEngine, drawNext } from './engine/draw';
+import { COLUMNS, columnOf, createDrawEngine, drawNext, undoLastDraw } from './engine/draw';
 import { addHistoryEntry, clearHistory, filterBySession, loadHistory, toCsv } from './engine/history';
 import { createCustomPattern, FREE_INDEX, Pattern, patternColumns } from './engine/patterns';
 import { normalizeRoomCode } from './engine/roomCode';
@@ -177,6 +177,13 @@ function toggleManualCall(n: number): void {
     if (state.settings.drawSoundEnabled) playDrawSound();
     if (state.settings.voiceEnabled && (state.settings.audioTarget === 'controller' || state.settings.audioTarget === 'both')) speakCall(n);
   }
+  persistAndSync();
+  render();
+}
+
+function undoLastCall(): void {
+  if (drawSpinner.active || undoLastDraw(state.drawEngine) === null) return;
+  if (state.drawEngine.called.length === 0) state.gameStatus = 'idle';
   persistAndSync();
   render();
 }
@@ -390,6 +397,7 @@ function render(): void {
                 <div class="current-card ${drawSpinner.active ? 'spinning' : ''}"><div><span class="current-value" aria-live="polite">${spinningLabel ?? (current ? `${columnOf(current)}-${current}` : '—')}</span><span class="current-meta">${drawSpinner.active ? 'Drawing…' : `${calledCount} ball${calledCount === 1 ? '' : 's'} called`}</span></div></div>
                 <div class="draw-controls">
                   <button id="draw" class="draw-btn" ${state.gameStatus === 'won' || drawSpinner.active ? 'disabled' : ''}>${drawSpinner.active ? 'SPINNING…' : 'DRAW'}</button>
+                  <button id="undo-last-draw" class="btn btn-ghost" ${calledCount === 0 || drawSpinner.active ? 'disabled' : ''}>Undo last draw</button>
                   <div class="auto-row">
                     ${autoTimer !== null ? '<button id="pause-auto" class="btn btn-danger">Pause auto</button>' : `<button id="start-auto" class="btn btn-primary" ${state.gameStatus === 'won' ? 'disabled' : ''}>${autoPaused ? 'Resume auto' : 'Start auto'}</button>`}
                     <select id="interval" aria-label="Auto draw interval">${[1, 2, 3, 5, 10].map((seconds) => `<option value="${seconds * 1000}" ${state.settings.intervalMs === seconds * 1000 ? 'selected' : ''}>${seconds} sec</option>`).join('')}</select>
@@ -478,6 +486,7 @@ function bindEvents(): void {
   document.querySelector('#unpair')?.addEventListener('click', unpair);
   document.querySelector('#room-code')?.addEventListener('keydown', (event) => { if ((event as KeyboardEvent).key === 'Enter') document.querySelector<HTMLButtonElement>('#pair-button')?.click(); });
   document.querySelector('#draw')?.addEventListener('click', performDraw);
+  document.querySelector('#undo-last-draw')?.addEventListener('click', undoLastCall);
   document.querySelector('#start-auto')?.addEventListener('click', startAuto);
   document.querySelector('#pause-auto')?.addEventListener('click', () => stopAuto(true));
   document.querySelector('#check-winner')?.addEventListener('click', openWinnerDialog);
